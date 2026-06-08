@@ -1,378 +1,560 @@
-import React, { useState, useEffect } from 'react';
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <!-- 가로 모드 최적화 및 핀치 줌 방지 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>배드민턴 복식 심판 점수판</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: manipulation; /* 더블 탭 줌 방지 */
+            -webkit-user-select: none; /* 텍스트 선택 방지 */
+            user-select: none;
+            overscroll-behavior: none; /* 당겨서 새로고침 방지 */
+        }
 
-// --- 자체 내장 SVG 아이콘 컴포넌트 ---
-const IconSettings = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3"></circle>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-  </svg>
-);
+        /* 코트 라인 애니메이션 및 스타일 */
+        .court-bg {
+            background-color: #047857; /* 에메랄드 그린 (표준 배드민턴 코트 색상) */
+        }
+        
+        .active-court {
+            background-color: rgba(253, 224, 71, 0.35); /* 활성화된 서비스/리시브 코트 하이라이트 */
+            transition: background-color 0.3s ease;
+        }
 
-const IconUndo = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7v6h6"></path>
-    <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
-  </svg>
-);
+        /* 셔틀콕 아이콘 애니메이션 */
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-3px) rotate(5deg); }
+        }
+        .shuttle-icon {
+            animation: float 2s ease-in-out infinite;
+        }
 
-const IconSwap = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="15 14 20 9 15 4"></polyline>
-    <path d="M4 20v-7a4 4 0 0 1 4-4h12"></path>
-  </svg>
-);
+        /* 스코어 텍스트 글로우 */
+        .score-text {
+            text-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* 모달 배경 블러 */
+        .backdrop-blur {
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white h-screen w-full flex flex-col overflow-hidden">
 
-const IconShuttlecock = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 22a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />
-    <path d="M10 17.5l-4-9M14 17.5l4-9M12 17.5v-10M7 5c1.5-2 8.5-2 10 0" />
-    <path d="M6 8c2-1.5 10-1.5 12 0" />
-    <path d="M8.5 13c1.5-1 5.5-1 7 0" />
-  </svg>
-);
-
-
-export default function App() {
-  // CodeSandbox 환경 디자인(Tailwind CSS) 안전 로드
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.tailwindcss.com';
-    document.head.appendChild(script);
-  }, []);
-
-  const [mode, setMode] = useState('setup');
-  
-  const [setup, setSetup] = useState({
-    teamA: { name: '팀 A (청)', p1: '선수 1', p2: '선수 2' },
-    teamB: { name: '팀 B (홍)', p1: '선수 3', p2: '선수 4' },
-    firstServeTeam: 'A',
-    firstServer: 'p1', 
-    firstReceiver: 'p1' 
-  });
-
-  const [game, setGame] = useState(null);
-  const [history, setHistory] = useState([]);
-  
-  // UI 코트 배치: 좌우 배치로 변경
-  const [leftTeam, setLeftTeam] = useState('A'); 
-  const rightTeam = leftTeam === 'A' ? 'B' : 'A';
-
-  const startGame = () => {
-    const serveTeam = setup.firstServeTeam;
-    const receiveTeam = serveTeam === 'A' ? 'B' : 'A';
-
-    const serveTeamObj = serveTeam === 'A' ? setup.teamA : setup.teamB;
-    const sName = serveTeamObj[setup.firstServer];
-    const sPartnerName = serveTeamObj[setup.firstServer === 'p1' ? 'p2' : 'p1'];
-
-    const receiveTeamObj = receiveTeam === 'A' ? setup.teamA : setup.teamB;
-    const rName = receiveTeamObj[setup.firstReceiver];
-    const rPartnerName = receiveTeamObj[setup.firstReceiver === 'p1' ? 'p2' : 'p1'];
-
-    const initialPositions = {
-      A: { right: '', left: '' },
-      B: { right: '', left: '' }
-    };
-
-    initialPositions[serveTeam].right = sName;
-    initialPositions[serveTeam].left = sPartnerName;
-    initialPositions[receiveTeam].right = rName;
-    initialPositions[receiveTeam].left = rPartnerName;
-
-    setGame({
-      scoreA: 0,
-      scoreB: 0,
-      servingTeam: serveTeam,
-      positions: initialPositions,
-      gameOver: false,
-      winner: null
-    });
-    setHistory([]);
-    setMode('playing');
-  };
-
-  const addScore = (scoringTeam) => {
-    if (game.gameOver) return;
-
-    setHistory([...history, game]);
-
-    let nextGame = JSON.parse(JSON.stringify(game));
-
-    if (scoringTeam === 'A') nextGame.scoreA++;
-    else nextGame.scoreB++;
-
-    if (nextGame.servingTeam === scoringTeam) {
-      const temp = nextGame.positions[scoringTeam].right;
-      nextGame.positions[scoringTeam].right = nextGame.positions[scoringTeam].left;
-      nextGame.positions[scoringTeam].left = temp;
-    } else {
-      nextGame.servingTeam = scoringTeam;
-    }
-
-    const sScore = scoringTeam === 'A' ? nextGame.scoreA : nextGame.scoreB;
-    const oScore = scoringTeam === 'A' ? nextGame.scoreB : nextGame.scoreA;
-    
-    if ((sScore >= 21 && sScore - oScore >= 2) || sScore === 30) {
-      nextGame.gameOver = true;
-      nextGame.winner = scoringTeam;
-    }
-
-    setGame(nextGame);
-  };
-
-  const undo = () => {
-    if (history.length > 0) {
-      const prevGame = history[history.length - 1];
-      setGame(prevGame);
-      setHistory(history.slice(0, -1));
-    }
-  };
-
-  let activeServer = null;
-  let activeReceiver = null;
-  let activeSide = null;
-
-  if (game && !game.gameOver) {
-    const currentScore = game.servingTeam === 'A' ? game.scoreA : game.scoreB;
-    const receivingTeam = game.servingTeam === 'A' ? 'B' : 'A';
-    
-    activeSide = currentScore % 2 === 0 ? 'right' : 'left';
-    
-    activeServer = game.positions[game.servingTeam][activeSide];
-    activeReceiver = game.positions[receivingTeam][activeSide]; 
-  }
-
-  if (mode === 'setup') {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans text-gray-800">
-        <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-slate-800 text-white p-5 text-center">
-            <h1 className="text-2xl font-bold flex items-center justify-center gap-2">
-              <IconShuttlecock /> 복식 심판 점수판 설정
-            </h1>
-          </div>
-          
-          <div className="p-6 space-y-6">
-            <div className="p-4 bg-blue-50 border-2 border-blue-100 rounded-xl">
-              <input 
-                value={setup.teamA.name} onChange={(e) => setSetup({...setup, teamA: {...setup.teamA, name: e.target.value}})}
-                className="w-full text-xl font-bold bg-transparent border-b-2 border-blue-300 focus:border-blue-600 outline-none mb-3 pb-1"
-              />
-              <div className="flex gap-3">
-                <input value={setup.teamA.p1} onChange={(e) => setSetup({...setup, teamA: {...setup.teamA, p1: e.target.value}})} className="w-1/2 p-2 rounded border outline-none focus:ring-2 focus:ring-blue-400" placeholder="선수 1"/>
-                <input value={setup.teamA.p2} onChange={(e) => setSetup({...setup, teamA: {...setup.teamA, p2: e.target.value}})} className="w-1/2 p-2 rounded border outline-none focus:ring-2 focus:ring-blue-400" placeholder="선수 2"/>
-              </div>
-            </div>
-
-            <div className="p-4 bg-red-50 border-2 border-red-100 rounded-xl">
-              <input 
-                value={setup.teamB.name} onChange={(e) => setSetup({...setup, teamB: {...setup.teamB, name: e.target.value}})}
-                className="w-full text-xl font-bold bg-transparent border-b-2 border-red-300 focus:border-red-600 outline-none mb-3 pb-1"
-              />
-              <div className="flex gap-3">
-                <input value={setup.teamB.p1} onChange={(e) => setSetup({...setup, teamB: {...setup.teamB, p1: e.target.value}})} className="w-1/2 p-2 rounded border outline-none focus:ring-2 focus:ring-red-400" placeholder="선수 3"/>
-                <input value={setup.teamB.p2} onChange={(e) => setSetup({...setup, teamB: {...setup.teamB, p2: e.target.value}})} className="w-1/2 p-2 rounded border outline-none focus:ring-2 focus:ring-red-400" placeholder="선수 4"/>
-              </div>
-            </div>
-
-            <div className="p-4 bg-gray-50 border-2 border-gray-200 rounded-xl space-y-3">
-              <h3 className="font-bold text-gray-700">0:0 시작 서비스 설정</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-semibold text-gray-500">첫 서브 팀</label>
-                  <select value={setup.firstServeTeam} onChange={(e) => setSetup({...setup, firstServeTeam: e.target.value})} className="w-full p-2 border rounded">
-                    <option value="A">{setup.teamA.name}</option>
-                    <option value="B">{setup.teamB.name}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500">첫 서버 (우측 시작)</label>
-                  <select value={setup.firstServer} onChange={(e) => setSetup({...setup, firstServer: e.target.value})} className="w-full p-2 border rounded">
-                    <option value="p1">{setup[setup.firstServeTeam === 'A' ? 'teamA' : 'teamB'].p1}</option>
-                    <option value="p2">{setup[setup.firstServeTeam === 'A' ? 'teamA' : 'teamB'].p2}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500">첫 리시버 (우측 대기)</label>
-                  <select value={setup.firstReceiver} onChange={(e) => setSetup({...setup, firstReceiver: e.target.value})} className="w-full p-2 border rounded">
-                    <option value="p1">{setup[setup.firstServeTeam === 'A' ? 'teamB' : 'teamA'].p1}</option>
-                    <option value="p2">{setup[setup.firstServeTeam === 'A' ? 'teamB' : 'teamA'].p2}</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <button onClick={startGame} className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg rounded-xl shadow-lg transition-colors">
-              경기 시작
+    <header class="flex justify-between items-center px-6 py-3 bg-gray-800 border-b border-gray-700 shadow-lg z-10 shrink-0">
+        <div class="flex items-center space-x-4">
+            <h1 class="text-xl font-bold tracking-wider text-emerald-400">BWF SCOREBOARD</h1>
+            <span class="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">복식 (Doubles)</span>
+        </div>
+        <div class="flex space-x-3">
+            <button id="btn-undo" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold text-sm transition shadow">
+                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg> 실행취소
             </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 데이터 할당 (좌, 우 팀)
-  const leftTeamData = leftTeam === 'A' ? setup.teamA : setup.teamB;
-  const rightTeamData = rightTeam === 'A' ? setup.teamA : setup.teamB;
-  const leftScore = leftTeam === 'A' ? game.scoreA : game.scoreB;
-  const rightScore = rightTeam === 'A' ? game.scoreA : game.scoreB;
-
-  // 선수 박스 (코트 위에 오버레이 되는 형태)
-  const CourtPlayerBox = ({ team, side }) => {
-    const playerName = game.positions[team][side];
-    const isServer = playerName === activeServer;
-    const isReceiver = playerName === activeReceiver;
-    
-    let bgClass = "bg-transparent";
-    let textClass = "text-white drop-shadow-md";
-    let borderClass = "border-transparent";
-
-    if (isServer) {
-      bgClass = "bg-yellow-400/90";
-      textClass = "text-black";
-      borderClass = "border-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.5)]";
-    } else if (isReceiver) {
-      bgClass = "bg-orange-400/90";
-      textClass = "text-black";
-      borderClass = "border-orange-300";
-    }
-
-    return (
-      <div className={`flex-1 m-1 md:m-2 rounded-lg flex flex-col items-center justify-center border-2 transition-all duration-300 relative ${bgClass} ${borderClass}`}>
-        <div className={`absolute top-1 left-2 text-[10px] md:text-xs font-bold tracking-widest opacity-70 ${textClass}`}>
-          {side === 'right' ? '우측(R)' : '좌측(L)'}
-        </div>
-        
-        <span className={`text-lg md:text-2xl font-bold truncate px-2 w-full text-center ${textClass}`}>
-          {playerName}
-        </span>
-
-        {isServer && (
-          <div className="absolute bottom-1 bg-black text-yellow-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold animate-pulse">
-             서버
-          </div>
-        )}
-        {isReceiver && (
-          <div className="absolute bottom-1 bg-black text-orange-400 text-[10px] md:text-xs px-2 py-0.5 rounded-full font-bold">
-            리시버
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-900 flex flex-col font-sans select-none text-white overflow-hidden">
-      
-      {/* 헤더 바 */}
-      <div className="flex justify-between items-center p-3 bg-slate-800 shadow-md z-20">
-        <button onClick={() => setMode('setup')} className="flex items-center gap-1 bg-slate-700 p-2 rounded-lg text-sm hover:bg-slate-600 transition-colors">
-          <IconSettings /> 설정
-        </button>
-        
-        <div className="flex items-center gap-3">
-          <button onClick={() => setLeftTeam(leftTeam === 'A' ? 'B' : 'A')} className="flex items-center gap-1 bg-slate-700 p-2 rounded-lg text-sm hover:bg-slate-600 transition-colors">
-            <IconSwap /> 좌우 변경
-          </button>
-          <button onClick={undo} disabled={history.length === 0} className={`flex items-center gap-1 p-2 rounded-lg text-sm transition-colors ${history.length > 0 ? 'bg-slate-700 hover:bg-slate-600' : 'text-slate-500 opacity-50'}`}>
-            <IconUndo /> 취소
-          </button>
-        </div>
-      </div>
-
-      {/* 게임 오버 오버레이 */}
-      {game.gameOver && (
-        <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white text-slate-900 p-8 rounded-2xl w-full max-w-sm text-center">
-            <h2 className="text-3xl font-black mb-2">{setup[game.winner === 'A' ? 'teamA' : 'teamB'].name}</h2>
-            <p className="text-xl font-bold text-gray-500 mb-6">최종 승리!</p>
-            <div className="text-6xl font-black text-slate-200 mb-8">
-              {game.scoreA} : {game.scoreB}
-            </div>
-            <button onClick={() => setMode('setup')} className="w-full py-3 bg-slate-900 text-white rounded-lg text-lg font-bold">
-              새 게임 설정으로
+            <button id="btn-swap" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold text-sm transition shadow">
+                <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg> 코트 변경
             </button>
-          </div>
+            <button id="btn-reset" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold text-sm transition shadow">
+                새 게임 / 설정
+            </button>
         </div>
-      )}
+    </header>
 
-      {/* 메인 경기 영역 (좌/우 레이아웃) */}
-      <div className="flex-1 flex flex-col lg:flex-row p-2 md:p-4 gap-2 md:gap-4">
+    <main class="flex-1 flex w-full p-4 gap-4 overflow-hidden relative">
         
-        {/* 왼쪽 팀 스코어 버튼 */}
-        <button 
-          onClick={() => addScore(leftTeam)}
-          className={`flex-1 lg:max-w-[250px] flex flex-row lg:flex-col items-center justify-between lg:justify-center p-4 lg:p-8 rounded-2xl transition-all border-4 border-transparent
-            ${leftTeam === 'A' ? 'bg-blue-900/40 hover:bg-blue-800/60 hover:border-blue-500/50 text-blue-300' : 'bg-red-900/40 hover:bg-red-800/60 hover:border-red-500/50 text-red-300'}`}
-        >
-          <div className="text-3xl md:text-4xl lg:text-5xl font-bold lg:mb-4 w-1/3 lg:w-full text-left lg:text-center truncate">{leftTeamData.name}</div>
-          <div className="text-[6rem] md:text-[8rem] lg:text-[12rem] font-black leading-none drop-shadow-xl">{leftScore}</div>
+        <!-- 좌측 팀 (Left Team) -->
+        <button id="btn-score-left" class="flex-1 bg-gray-800 rounded-2xl flex flex-col items-center justify-center border-4 border-transparent hover:border-gray-600 active:bg-gray-700 transition relative group shadow-2xl">
+            <div id="left-serving-indicator" class="absolute top-4 w-full text-center text-yellow-400 font-bold opacity-0 transition-opacity">
+                ▶ SERVING
+            </div>
+            <div id="left-team-name" class="text-2xl font-bold text-gray-300 mb-2">Team L</div>
+            <div id="left-score" class="text-[12vw] leading-none font-black score-text text-white">0</div>
+            <div class="absolute bottom-4 opacity-50 group-hover:opacity-100 text-sm">터치하여 득점</div>
         </button>
 
-        {/* ---------------- 사실적인 배드민턴 코트 (가운데) ---------------- */}
-        <div className="flex-[2] relative w-full rounded-lg shadow-2xl overflow-hidden bg-[#0a5c34] flex flex-col justify-center p-2 md:p-4 border-4 border-white min-h-[300px]">
-          
-          {/* 코트 바닥 라인 그리기 (절대 좌표로 배경 라인 구성) */}
-          <div className="absolute inset-2 md:inset-4 border-[2px] md:border-[3px] border-white pointer-events-none flex">
-            {/* 단식 사이드 라인 (위, 아래) */}
-            <div className="absolute top-[8%] bottom-[8%] left-0 right-0 border-y-[2px] border-white/60"></div>
-            
-            {/* 왼쪽 코트 라인 */}
-            <div className="w-1/2 h-full relative border-r-[2px] border-white">
-              {/* 복식 롱 서비스 라인 */}
-              <div className="absolute left-[8%] top-0 bottom-0 border-l-[2px] border-white/60"></div>
-              {/* 숏 서비스 라인 */}
-              <div className="absolute right-[25%] top-0 bottom-0 border-r-[2px] border-white"></div>
-              {/* 센터 라인 */}
-              <div className="absolute right-[25%] left-0 top-1/2 border-t-[2px] border-white"></div>
+        <div class="w-1/2 md:w-[45%] h-full relative rounded-xl overflow-hidden shadow-2xl court-bg border-4 border-white flex flex-col">
+            <!-- 코트 라인 그리기 (Absolute Position) -->
+            <!-- 네트 (Net) 명확하게 수정 -->
+            <div class="absolute left-1/2 top-0 bottom-0 w-5 -ml-[10px] z-[5] flex flex-col justify-between items-center pointer-events-none drop-shadow-2xl">
+                <!-- 네트 그물망 패턴 -->
+                <div class="absolute inset-0 bg-gray-900 border-x-2 border-black opacity-80" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px), repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(255,255,255,0.3) 2px, rgba(255,255,255,0.3) 4px);"></div>
+                <!-- 흰색 띠 (상단 테이프) -->
+                <div class="absolute top-0 bottom-0 w-1.5 bg-white z-10 shadow-[0_0_8px_rgba(255,255,255,1)]"></div>
+                <!-- 네트 지주식 기둥 (Top/Bottom) -->
+                <div class="w-5 h-5 bg-gray-300 rounded-full border-4 border-gray-800 shadow-lg z-20 -mt-2"></div>
+                <div class="w-5 h-5 bg-gray-300 rounded-full border-4 border-gray-800 shadow-lg z-20 -mb-2"></div>
             </div>
+            <!-- 왼쪽 숏 서비스 라인 -->
+            <div class="absolute left-[30%] top-0 bottom-0 w-0.5 bg-white opacity-80 z-0"></div>
+            <!-- 오른쪽 숏 서비스 라인 -->
+            <div class="absolute right-[30%] top-0 bottom-0 w-0.5 bg-white opacity-80 z-0"></div>
+            <!-- 복식 롱 서비스 라인 (좌/우) -->
+            <div class="absolute left-[6%] top-0 bottom-0 w-0.5 bg-white opacity-80 z-0"></div>
+            <div class="absolute right-[6%] top-0 bottom-0 w-0.5 bg-white opacity-80 z-0"></div>
+            <!-- 센터 라인 (좌/우) -->
+            <div class="absolute left-0 right-[70%] top-1/2 h-0.5 bg-white opacity-80 z-0 -mt-[1px]"></div>
+            <div class="absolute left-[70%] right-0 top-1/2 h-0.5 bg-white opacity-80 z-0 -mt-[1px]"></div>
 
-            {/* 오른쪽 코트 라인 */}
-            <div className="w-1/2 h-full relative">
-              {/* 센터 라인 */}
-              <div className="absolute left-[25%] right-0 top-1/2 border-t-[2px] border-white"></div>
-              {/* 숏 서비스 라인 */}
-              <div className="absolute left-[25%] top-0 bottom-0 border-l-[2px] border-white"></div>
-              {/* 복식 롱 서비스 라인 */}
-              <div className="absolute right-[8%] top-0 bottom-0 border-r-[2px] border-white/60"></div>
+            <!-- 선수 위치 그리드 -->
+            <div class="absolute inset-0 z-10 flex">
+                <!-- 좌측 팀 영역 -->
+                <div class="flex-1 flex flex-col border-r-2 border-transparent">
+                    <!-- 좌측 팀 상단 코트 (Left Court) -->
+                    <div id="court-left-top" class="flex-1 flex items-center justify-center relative p-2">
+                        <div class="bg-gray-900/80 px-4 py-2 rounded-xl text-center shadow-lg border border-gray-600 min-w-[120px]">
+                            <span class="block text-xs text-emerald-400 mb-0.5">Left Court</span>
+                            <div class="flex items-center justify-center h-8">
+                                <span id="name-left-top" class="font-bold text-white whitespace-nowrap text-lg">L.Player 2</span>
+                                <!-- 셔틀콕이 선수 이름 바로 옆에 밀착 -->
+                                <div class="server-icon-container hidden ml-2">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-yellow-400 shuttle-icon drop-shadow-md" fill="currentColor"><path d="M12,21 C10,21 8.5,19.5 8.5,18 C8.5,16.5 10,15 12,15 C14,15 15.5,16.5 15.5,18 C15.5,19.5 14,21 12,21 Z M12,14 L8,2 L16,2 L12,14 Z M7,4 L10,14 L5,6 L7,4 Z M17,4 L19,6 L14,14 L17,4 Z"></path></svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 좌측 팀 하단 코트 (Right Court) -->
+                    <div id="court-left-bottom" class="flex-1 flex items-center justify-center relative p-2 border-t border-transparent">
+                        <div class="bg-gray-900/80 px-4 py-2 rounded-xl text-center shadow-lg border border-gray-600 min-w-[120px]">
+                            <span class="block text-xs text-emerald-400 mb-0.5">Right Court</span>
+                            <div class="flex items-center justify-center h-8">
+                                <span id="name-left-bottom" class="font-bold text-white whitespace-nowrap text-lg">L.Player 1</span>
+                                <div class="server-icon-container hidden ml-2">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-yellow-400 shuttle-icon drop-shadow-md" fill="currentColor"><path d="M12,21 C10,21 8.5,19.5 8.5,18 C8.5,16.5 10,15 12,15 C14,15 15.5,16.5 15.5,18 C15.5,19.5 14,21 12,21 Z M12,14 L8,2 L16,2 L12,14 Z M7,4 L10,14 L5,6 L7,4 Z M17,4 L19,6 L14,14 L17,4 Z"></path></svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 우측 팀 영역 -->
+                <div class="flex-1 flex flex-col">
+                    <!-- 우측 팀 상단 코트 (Right Court) -->
+                    <div id="court-right-top" class="flex-1 flex items-center justify-center relative p-2">
+                        <div class="bg-gray-900/80 px-4 py-2 rounded-xl text-center shadow-lg border border-gray-600 min-w-[120px]">
+                            <span class="block text-xs text-emerald-400 mb-0.5">Right Court</span>
+                            <div class="flex items-center justify-center h-8">
+                                <!-- 우측 코트는 셔틀콕을 이름 좌측에 배치해 넷 방향성 확보 -->
+                                <div class="server-icon-container hidden mr-2">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-yellow-400 shuttle-icon drop-shadow-md" fill="currentColor"><path d="M12,21 C10,21 8.5,19.5 8.5,18 C8.5,16.5 10,15 12,15 C14,15 15.5,16.5 15.5,18 C15.5,19.5 14,21 12,21 Z M12,14 L8,2 L16,2 L12,14 Z M7,4 L10,14 L5,6 L7,4 Z M17,4 L19,6 L14,14 L17,4 Z"></path></svg>
+                                </div>
+                                <span id="name-right-top" class="font-bold text-white whitespace-nowrap text-lg">R.Player 1</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 우측 팀 하단 코트 (Left Court) -->
+                    <div id="court-right-bottom" class="flex-1 flex items-center justify-center relative p-2 border-t border-transparent">
+                        <div class="bg-gray-900/80 px-4 py-2 rounded-xl text-center shadow-lg border border-gray-600 min-w-[120px]">
+                            <span class="block text-xs text-emerald-400 mb-0.5">Left Court</span>
+                            <div class="flex items-center justify-center h-8">
+                                <div class="server-icon-container hidden mr-2">
+                                    <svg viewBox="0 0 24 24" class="w-7 h-7 text-yellow-400 shuttle-icon drop-shadow-md" fill="currentColor"><path d="M12,21 C10,21 8.5,19.5 8.5,18 C8.5,16.5 10,15 12,15 C14,15 15.5,16.5 15.5,18 C15.5,19.5 14,21 12,21 Z M12,14 L8,2 L16,2 L12,14 Z M7,4 L10,14 L5,6 L7,4 Z M17,4 L19,6 L14,14 L17,4 Z"></path></svg>
+                                </div>
+                                <span id="name-right-bottom" class="font-bold text-white whitespace-nowrap text-lg">R.Player 2</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-
-            {/* 정중앙 네트 (입체감 있는 기둥 느낌) */}
-            <div className="absolute left-1/2 top-[-5px] bottom-[-5px] w-3 -ml-[6px] bg-gradient-to-b from-gray-300 via-white to-gray-300 shadow-[0_0_10px_rgba(0,0,0,0.5)] z-0 rounded-full flex items-center justify-center">
-              <span className="bg-slate-800 text-white text-[8px] md:text-[10px] px-1 py-4 rounded-full font-bold tracking-widest writing-vertical rotate-180 absolute">NET</span>
-            </div>
-          </div>
-
-          {/* 인터랙티브 선수 박스 (코트 라인 위에 떠있는 형태) */}
-          <div className="relative w-full h-full flex z-10">
-             {/* 왼쪽 코트 구역 */}
-             {/* 심판이 아래쪽 사이드라인에서 본다고 가정할 때, 네트 왼쪽팀의 '좌측(Left)'은 화면의 위쪽(Top), '우측(Right)'은 아래쪽(Bottom)입니다. */}
-             <div className="w-1/2 h-full flex flex-col pr-8 md:pr-16 py-1 md:py-2">
-                <CourtPlayerBox team={leftTeam} side="left" />  
-                <CourtPlayerBox team={leftTeam} side="right" /> 
-             </div>
-
-             {/* 오른쪽 코트 구역 */}
-             {/* 네트 오른쪽팀이 마주보는 방향이므로, 그들의 '우측(Right)'은 화면의 위쪽(Top), '좌측(Left)'은 아래쪽(Bottom)입니다. 대각선 서브가 완벽히 성립됩니다. */}
-             <div className="w-1/2 h-full flex flex-col pl-8 md:pl-16 py-1 md:py-2">
-                <CourtPlayerBox team={rightTeam} side="right" /> 
-                <CourtPlayerBox team={rightTeam} side="left" />  
-             </div>
-          </div>
         </div>
-        {/* ----------------------------------------------------------- */}
 
-        {/* 오른쪽 팀 스코어 버튼 */}
-        <button 
-          onClick={() => addScore(rightTeam)}
-          className={`flex-1 lg:max-w-[250px] flex flex-row-reverse lg:flex-col items-center justify-between lg:justify-center p-4 lg:p-8 rounded-2xl transition-all border-4 border-transparent
-            ${rightTeam === 'A' ? 'bg-blue-900/40 hover:bg-blue-800/60 hover:border-blue-500/50 text-blue-300' : 'bg-red-900/40 hover:bg-red-800/60 hover:border-red-500/50 text-red-300'}`}
-        >
-          <div className="text-3xl md:text-4xl lg:text-5xl font-bold lg:mb-4 w-1/3 lg:w-full text-right lg:text-center truncate">{rightTeamData.name}</div>
-          <div className="text-[6rem] md:text-[8rem] lg:text-[12rem] font-black leading-none drop-shadow-xl">{rightScore}</div>
+        <button id="btn-score-right" class="flex-1 bg-gray-800 rounded-2xl flex flex-col items-center justify-center border-4 border-transparent hover:border-gray-600 active:bg-gray-700 transition relative group shadow-2xl">
+            <div id="right-serving-indicator" class="absolute top-4 w-full text-center text-yellow-400 font-bold opacity-0 transition-opacity">
+                SERVING ◀
+            </div>
+            <div id="right-team-name" class="text-2xl font-bold text-gray-300 mb-2">Team R</div>
+            <div id="right-score" class="text-[12vw] leading-none font-black score-text text-white">0</div>
+            <div class="absolute bottom-4 opacity-50 group-hover:opacity-100 text-sm">터치하여 득점</div>
         </button>
+    </main>
 
-      </div>
+    <div id="setup-modal" class="fixed inset-0 bg-black/80 backdrop-blur z-50 flex items-center justify-center p-4">
+        <div class="bg-gray-800 rounded-2xl shadow-2xl border border-gray-700 w-full max-w-3xl overflow-hidden flex flex-col">
+            <div class="bg-gray-900 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-emerald-400">경기 초기 설정</h2>
+            </div>
+            <div class="p-6 flex-1 overflow-y-auto">
+                <div class="grid grid-cols-2 gap-8">
+                    <!-- 좌측 코트 설정 -->
+                    <div class="space-y-4 bg-gray-700/30 p-4 rounded-xl border border-gray-600">
+                        <h3 class="font-bold text-lg text-center border-b border-gray-600 pb-2">좌측 코트 팀</h3>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">팀 이름</label>
+                            <input type="text" id="input-left-team" value="청팀" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">우측 코트 (시작 시)</label>
+                                <input type="text" id="input-left-p1" value="김철수" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">좌측 코트 (시작 시)</label>
+                                <input type="text" id="input-left-p2" value="이영희" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 우측 코트 설정 -->
+                    <div class="space-y-4 bg-gray-700/30 p-4 rounded-xl border border-gray-600">
+                        <h3 class="font-bold text-lg text-center border-b border-gray-600 pb-2">우측 코트 팀</h3>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">팀 이름</label>
+                            <input type="text" id="input-right-team" value="홍팀" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">우측 코트 (시작 시)</label>
+                                <input type="text" id="input-right-p1" value="박지성" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1">좌측 코트 (시작 시)</label>
+                                <input type="text" id="input-right-p2" value="손흥민" class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 최초 서비스 선택 -->
+                <div class="mt-8 bg-gray-900 p-4 rounded-xl border border-gray-600">
+                    <h3 class="font-bold text-center mb-4 text-yellow-400">첫 서비스 팀 (Toss 승자)</h3>
+                    <div class="flex justify-center space-x-6">
+                        <label class="flex items-center space-x-2 cursor-pointer group">
+                            <input type="radio" name="first-serve" value="left" checked class="w-5 h-5 accent-emerald-500">
+                            <span class="group-hover:text-emerald-400 transition">좌측 코트 팀</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer group">
+                            <input type="radio" name="first-serve" value="right" class="w-5 h-5 accent-emerald-500">
+                            <span class="group-hover:text-emerald-400 transition">우측 코트 팀</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-center text-gray-400 mt-3">* 0:0 상황이므로 첫 서비스는 각 팀의 <b>우측 코트</b> 선수가 담당합니다.</p>
+                </div>
+
+                <!-- 경기 규정 (점수) 설정 추가됨 -->
+                <div class="mt-4 bg-gray-900 p-4 rounded-xl border border-gray-600">
+                    <h3 class="font-bold text-center mb-4 text-emerald-400">경기 규정 (점수) 설정</h3>
+                    <div class="flex justify-center space-x-8">
+                        <div class="flex flex-col space-y-1 w-1/2 md:w-auto">
+                            <label class="text-sm text-gray-400 text-center">승리 목표 점수</label>
+                            <select id="select-target-score" class="bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white focus:outline-none focus:border-emerald-500 text-center font-bold">
+                                <option value="11">11점 (초등부/단축)</option>
+                                <option value="15">15점 (과거 규정)</option>
+                                <option value="21" selected>21점 (BWF 표준)</option>
+                                <option value="25">25점 (동호인 랠리)</option>
+                                <option value="31">31점 (듀스 없음)</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col space-y-1 w-1/2 md:w-auto">
+                            <label class="text-sm text-gray-400 text-center">최대 상한 (듀스 한계)</label>
+                            <select id="select-max-score" class="bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white focus:outline-none focus:border-emerald-500 text-center font-bold">
+                                <option value="15">15점</option>
+                                <option value="21">21점</option>
+                                <option value="25">25점</option>
+                                <option value="30" selected>30점</option>
+                                <option value="31">31점</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-900 border-t border-gray-700 flex justify-end">
+                <button id="btn-start-game" class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition w-full md:w-auto">
+                    경기 시작
+                </button>
+            </div>
+        </div>
     </div>
-  );
-}
+
+    <!-- 커스텀 알림 모달 -->
+    <div id="alert-modal" class="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center hidden opacity-0 transition-opacity">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl border border-gray-600 text-center max-w-sm w-full mx-4 transform scale-95 transition-transform">
+            <p id="alert-message" class="text-lg font-semibold mb-6 text-white"></p>
+            <button id="btn-alert-close" class="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-white font-bold w-full">확인</button>
+        </div>
+    </div>
+
+    <script>
+        // 커스텀 알림 함수 (alert 대체)
+        function showAlert(msg) {
+            const modal = document.getElementById('alert-modal');
+            const msgEl = document.getElementById('alert-message');
+            msgEl.textContent = msg;
+            modal.classList.remove('hidden');
+            // 애니메이션
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.firstElementChild.classList.remove('scale-95');
+                modal.firstElementChild.classList.add('scale-100');
+            }, 10);
+        }
+
+        document.getElementById('btn-alert-close').addEventListener('click', () => {
+            const modal = document.getElementById('alert-modal');
+            modal.classList.add('opacity-0');
+            modal.firstElementChild.classList.remove('scale-100');
+            modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 300);
+        });
+
+        // 상태 관리 변수
+        let history = []; // 실행 취소를 위한 스택
+        let state = {
+            left: {
+                teamName: "Team L",
+                score: 0,
+                // 시각적 코트 위치 (Top: Left Court, Bottom: Right Court)
+                topPlayer: "L.Player 2",    // 좌측 팀 왼쪽 코트
+                bottomPlayer: "L.Player 1", // 좌측 팀 오른쪽 코트
+            },
+            right: {
+                teamName: "Team R",
+                score: 0,
+                // 시각적 코트 위치 (Top: Right Court, Bottom: Left Court)
+                topPlayer: "R.Player 1",    // 우측 팀 오른쪽 코트
+                bottomPlayer: "R.Player 2", // 우측 팀 왼쪽 코트
+            },
+            servingSide: 'left', // 'left' 또는 'right'
+            activeServerId: '',  // 현재 서버의 HTML 요소 ID
+            activeReceiverId: '',// 현재 리시버의 HTML 요소 ID
+            targetScore: 21,     // 경기 승리 목표 점수
+            maxScore: 30         // 듀스 상황의 최대 제한 점수
+        };
+
+        // DOM 요소 캐싱
+        const UI = {
+            leftScore: document.getElementById('left-score'),
+            rightScore: document.getElementById('right-score'),
+            leftName: document.getElementById('left-team-name'),
+            rightName: document.getElementById('right-team-name'),
+            
+            nameLeftTop: document.getElementById('name-left-top'),
+            nameLeftBottom: document.getElementById('name-left-bottom'),
+            nameRightTop: document.getElementById('name-right-top'),
+            nameRightBottom: document.getElementById('name-right-bottom'),
+
+            courtLeftTop: document.getElementById('court-left-top'),
+            courtLeftBottom: document.getElementById('court-left-bottom'),
+            courtRightTop: document.getElementById('court-right-top'),
+            courtRightBottom: document.getElementById('court-right-bottom'),
+
+            leftIndicator: document.getElementById('left-serving-indicator'),
+            rightIndicator: document.getElementById('right-serving-indicator'),
+        };
+
+        function saveHistory() {
+            history.push(JSON.parse(JSON.stringify(state)));
+        }
+
+        function addPoint(scoringSide) {
+            saveHistory();
+            
+            const prevServingSide = state.servingSide;
+            state[scoringSide].score++;
+
+            if (prevServingSide === scoringSide) {
+                // 득점 팀이 서비스 중이었던 경우: 점수 올리고 서버 위치 변경 (팀원 간 Swap)
+                const temp = state[scoringSide].topPlayer;
+                state[scoringSide].topPlayer = state[scoringSide].bottomPlayer;
+                state[scoringSide].bottomPlayer = temp;
+            } else {
+                // 리시브 팀이 득점한 경우: 점수 올리고 서비스 권한 획득 (위치 변경 없음)
+                state.servingSide = scoringSide;
+            }
+
+            updateServerReceiver();
+            render();
+            checkMatchPoint();
+        }
+
+        // BWF 규칙에 따른 서버와 리시버 결정
+        function updateServerReceiver() {
+            const side = state.servingSide;
+            const score = state[side].score;
+            const isEven = (score % 2 === 0);
+
+            // Left Side: Top = Left Court, Bottom = Right Court
+            // Right Side: Top = Right Court, Bottom = Left Court
+
+            if (side === 'left') {
+                if (isEven) {
+                    state.activeServerId = 'court-left-bottom'; // 우측 코트
+                    state.activeReceiverId = 'court-right-top'; // 대각선 우측 코트
+                } else {
+                    state.activeServerId = 'court-left-top';    // 좌측 코트
+                    state.activeReceiverId = 'court-right-bottom'; // 대각선 좌측 코트
+                }
+            } else { // servingSide === 'right'
+                if (isEven) {
+                    state.activeServerId = 'court-right-top'; // 우측 코트
+                    state.activeReceiverId = 'court-left-bottom'; // 대각선 우측 코트
+                } else {
+                    state.activeServerId = 'court-right-bottom'; // 좌측 코트
+                    state.activeReceiverId = 'court-left-top'; // 대각선 좌측 코트
+                }
+            }
+        }
+
+        function render() {
+            // 점수 및 이름 업데이트
+            UI.leftScore.textContent = state.left.score;
+            UI.rightScore.textContent = state.right.score;
+            UI.leftName.textContent = state.left.teamName;
+            UI.rightName.textContent = state.right.teamName;
+
+            UI.nameLeftTop.textContent = state.left.topPlayer;
+            UI.nameLeftBottom.textContent = state.left.bottomPlayer;
+            UI.nameRightTop.textContent = state.right.topPlayer;
+            UI.nameRightBottom.textContent = state.right.bottomPlayer;
+
+            // 서빙 인디케이터
+            if (state.servingSide === 'left') {
+                UI.leftIndicator.classList.remove('opacity-0');
+                UI.leftIndicator.classList.add('opacity-100');
+                UI.rightIndicator.classList.remove('opacity-100');
+                UI.rightIndicator.classList.add('opacity-0');
+            } else {
+                UI.rightIndicator.classList.remove('opacity-0');
+                UI.rightIndicator.classList.add('opacity-100');
+                UI.leftIndicator.classList.remove('opacity-100');
+                UI.leftIndicator.classList.add('opacity-0');
+            }
+
+            // 모든 코트 초기화
+            const courts = [UI.courtLeftTop, UI.courtLeftBottom, UI.courtRightTop, UI.courtRightBottom];
+            courts.forEach(court => {
+                court.classList.remove('active-court');
+                const icon = court.querySelector('.server-icon-container');
+                if(icon) icon.classList.add('hidden');
+            });
+
+            // 서버 및 리시버 하이라이트
+            const serverCourt = document.getElementById(state.activeServerId);
+            const receiverCourt = document.getElementById(state.activeReceiverId);
+
+            if (serverCourt) {
+                serverCourt.classList.add('active-court');
+                const icon = serverCourt.querySelector('.server-icon-container');
+                if(icon) icon.classList.remove('hidden');
+            }
+            if (receiverCourt) {
+                receiverCourt.classList.add('active-court');
+            }
+            
+            // 득점 버튼 색상 시각적 피드백
+            document.getElementById('btn-score-left').style.borderColor = state.servingSide === 'left' ? '#facc15' : 'transparent';
+            document.getElementById('btn-score-right').style.borderColor = state.servingSide === 'right' ? '#facc15' : 'transparent';
+        }
+
+        function checkMatchPoint() {
+            // 설정된 목표 점수 및 최대 상한 점수 도달 체크
+            const l = state.left.score;
+            const r = state.right.score;
+            const target = state.targetScore;
+            const max = state.maxScore;
+
+            if ((l >= target || r >= target) && Math.abs(l - r) >= 2) {
+                const winner = l > r ? state.left.teamName : state.right.teamName;
+                setTimeout(() => showAlert(`${winner} 게임 매치 포인트 승리!`), 100);
+            } else if (l === max || r === max) {
+                const winner = l === max ? state.left.teamName : state.right.teamName;
+                setTimeout(() => showAlert(`상한 점수 도달! ${winner} 승리!`), 100);
+            }
+        }
+
+        function undo() {
+            if (history.length > 0) {
+                state = history.pop();
+                updateServerReceiver();
+                render();
+            } else {
+                showAlert("더 이상 실행 취소할 수 없습니다.");
+            }
+        }
+
+        function swapEnds() {
+            saveHistory();
+            
+            // 팀 정보 교환
+            const temp = state.left;
+            state.left = state.right;
+            state.right = temp;
+
+            // 좌우 변경 시 시각적 Top/Bottom 의미가 반전됨을 보정해야 함
+            // Left Team (기존 Right): Old Top(Right Court) -> New Bottom(Right Court)
+            const newLeftTop = state.left.bottomPlayer;
+            const newLeftBottom = state.left.topPlayer;
+            state.left.topPlayer = newLeftTop;
+            state.left.bottomPlayer = newLeftBottom;
+
+            // Right Team (기존 Left): Old Top(Left Court) -> New Bottom(Left Court)
+            const newRightTop = state.right.bottomPlayer;
+            const newRightBottom = state.right.topPlayer;
+            state.right.topPlayer = newRightTop;
+            state.right.bottomPlayer = newRightBottom;
+
+            // 서비스 사이드 반전
+            state.servingSide = state.servingSide === 'left' ? 'right' : 'left';
+
+            updateServerReceiver();
+            render();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 점수 버튼
+            document.getElementById('btn-score-left').addEventListener('click', () => addPoint('left'));
+            document.getElementById('btn-score-right').addEventListener('click', () => addPoint('right'));
+
+            // 상단 컨트롤
+            document.getElementById('btn-undo').addEventListener('click', undo);
+            document.getElementById('btn-swap').addEventListener('click', swapEnds);
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                document.getElementById('setup-modal').classList.remove('hidden');
+            });
+
+            // 설정 완료 및 게임 시작
+            document.getElementById('btn-start-game').addEventListener('click', () => {
+                history = [];
+                
+                // 모달 입력값 반영
+                state.left.teamName = document.getElementById('input-left-team').value || "Team L";
+                state.right.teamName = document.getElementById('input-right-team').value || "Team R";
+                
+                // Left 팀 (Bottom이 Right Court, Top이 Left Court)
+                state.left.bottomPlayer = document.getElementById('input-left-p1').value;
+                state.left.topPlayer = document.getElementById('input-left-p2').value;
+                
+                // Right 팀 (Top이 Right Court, Bottom이 Left Court)
+                state.right.topPlayer = document.getElementById('input-right-p1').value;
+                state.right.bottomPlayer = document.getElementById('input-right-p2').value;
+
+                state.left.score = 0;
+                state.right.score = 0;
+
+                // 점수 설정 반영
+                state.targetScore = parseInt(document.getElementById('select-target-score').value);
+                state.maxScore = parseInt(document.getElementById('select-max-score').value);
+
+                const firstServe = document.querySelector('input[name="first-serve"]:checked').value;
+                state.servingSide = firstServe;
+
+                document.getElementById('setup-modal').classList.add('hidden');
+                
+                updateServerReceiver();
+                render();
+            });
+
+            // 초기 렌더링 (모달 열어두기)
+            // updateServerReceiver();
+            // render();
+        });
+
+    </script>
+</body>
+</html>
